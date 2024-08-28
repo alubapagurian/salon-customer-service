@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Setup Services</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .designer-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .designer-group input {
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
+            <a class="navbar-brand" href="#">Hair Salon Service</a>
+            <div class="collapse navbar-collapse">
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/record">紀錄資料</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/query">查詢資料</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/setup">設定產品價格</a>
+                    </li>
+                </ul>
+            </div>
+        </nav>
+        <h1 class="mb-4">Setup Services</h1>
+        <form method="POST" action="/setup">
+            <table class="table table-bordered">
+                <thead class="thead-light">
+                    <tr>
+                        <th>Service Item</th>
+                        <th>Price</th>
+                        <th>Designers</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for service in services %}
+                    <tr>
+                        <td>{{ service.name }}</td>
+                        <td>
+                            <input type="number" name="price_{{ service.name }}" class="form-control" value="{{ service.price }}" disabled required>
+                        </td>
+                        <td>
+                            {% for designer in service.designers %}
+                            <div class="designer-group">
+                                <span>{{ designer.name }}</span>
+                                <input type="number" name="percentage_{{ service.name }}_{{ designer.name }}" class="form-control" value="{{ designer.percentage }}" disabled required>
+                            </div>
+                            {% endfor %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="button" id="modify-button" class="btn btn-secondary">Modify</button>
+            <button type="submit" id="save-button" class="btn btn-primary" disabled>Save</button>
+        </form>
+    </div>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        document.getElementById('modify-button').addEventListener('click', function() {
+            document.querySelectorAll('input').forEach(input => input.disabled = false);
+            document.getElementById('save-button').disabled = false;
+            document.getElementById('modify-button').disabled = true;
+        });
+    </script>
+</body>
+</html>
