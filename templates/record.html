@@ -172,7 +172,11 @@
             <input type="hidden" id="id" name="id">
             <div class="form-group">
                 <label for="designer_name">設計師</label>
-                <input type="text" id="designer_name" name="designer_name" class="form-control" required>
+                <select id="designer_name" name="designer_name" class="form-control" required>
+                    {% for designer in designers %}
+                    <option value="{{ designer.name }}">{{ designer.name }}</option>
+                    {% endfor %}
+                </select>
             </div>
             <div class="form-group">
                 <label for="date">日期</label>

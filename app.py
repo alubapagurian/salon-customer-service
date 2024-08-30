@@ -47,6 +47,101 @@ def init_db():
 def index():
     return redirect(url_for('record'))
 
+@app.route('/get_designers')
+def get_designers():
+    conn = sqlite3.connect('salon.db')
+    c = conn.cursor()
+    c.execute('SELECT name FROM designers')
+    designers = c.fetchall()
+    
+    designer_data = []
+    for designer in designers:
+        designer_name = designer[0]
+        service_data = {}
+        for service in ['洗髮', '剪髮', '染髮', '燙髮', '護髮', '彩妝', '頭皮護理']:
+            c.execute('SELECT price FROM services WHERE name = ?', (service,))
+            price = c.fetchone()
+            c.execute('SELECT percentage FROM service_designers WHERE service_name = ? AND designer_name = ?', (service, designer_name))
+            designer_commission = c.fetchone()
+            service_data[service] = {
+                'price': price[0] if price else 0,
+                'designer_commission': designer_commission[0] if designer_commission else 0
+            }
+        designer_data.append({
+            'name': designer_name,
+            'services': service_data
+        })
+    conn.close()
+    return jsonify(designers=designer_data)
+
+@app.route('/setup', methods=['GET', 'POST'])
+def setup():
+    conn = sqlite3.connect('salon.db')
+    c = conn.cursor()
+    if request.method == 'POST':
+        data = request.json
+        conn = sqlite3.connect('salon.db')
+        c = conn.cursor()
+        
+        # Clear existing data
+        c.execute('DELETE FROM designers')
+        c.execute('DELETE FROM services')
+        c.execute('DELETE FROM service_designers')
+        
+        for designer in data['designers']:
+            c.execute('INSERT INTO designers (name) VALUES (?)', (designer['name'],))
+            for service, details in designer['services'].items():
+                c.execute('INSERT OR REPLACE INTO services (name, price) VALUES (?, ?)', (service, details['price']))
+                c.execute('INSERT INTO service_designers (service_name, designer_name, percentage) VALUES (?, ?, ?)', 
+                          (service, designer['name'], details['commission']))
+        
+        conn.commit()
+        conn.close()
+        return jsonify(success=True)
+
+        for key, value in request.form.items():
+            if key.startswith('price_'):
+                parts = key.split('_')
+                designer_name = parts[1]
+                service_name = parts[2]
+                price = float(value)
+                c.execute('INSERT OR REPLACE INTO services (name, price) VALUES (?, ?)', (service_name, price))
+            elif key.startswith('designer_commission_'):
+                parts = key.split('_')
+                designer_name = parts[2]
+                service_name = parts[3]
+                designer_commission = float(value)
+                c.execute('INSERT OR REPLACE INTO service_designers (service_name, designer_name, percentage) VALUES (?, ?, ?)', (service_name, designer_name, designer_commission))
+        conn.commit()
+        conn.close()
+        return redirect(url_for('setup'))
+    
+    c.execute('SELECT name FROM designers')
+    designers = c.fetchall()
+    services = ['洗髮', '剪髮', '染髮', '燙髮', '護髮', '彩妝', '頭皮護理']
+    designer_data = []
+    for designer in designers:
+        designer_name = designer[0]
+        service_data = {}
+        for service in services:
+            c.execute('SELECT price FROM services WHERE name = ?', (service,))
+            price = c.fetchone()[0]
+            c.execute('SELECT percentage FROM service_designers WHERE service_name = ? AND designer_name = ?', (service, designer_name))
+            designer_commission = c.fetchone()[0]
+            # Fetch auxiliary commission if stored separately
+            auxiliary_commission = 0  # Replace with actual fetch logic
+            service_data[service] = {
+                'price': price,
+                'designer_commission': designer_commission,
+                'auxiliary_commission': auxiliary_commission
+            }
+        designer_data.append({
+            'name': designer_name,
+            'services': service_data
+        })
+    conn.close()
+    return render_template('setup.html', designers=designer_data, services=services)
+
 @app.route('/record', methods=['GET', 'POST'])
 def record():
     date = datetime.now().strftime('%Y-%m-%d')
@@ -85,9 +180,11 @@ def record():
     c = conn.cursor()
     c.execute('SELECT * FROM customers WHERE date = ?', (date,))
     customers = c.fetchall()
+    c.execute('SELECT name FROM designers')
+    designers = c.fetchall()
     conn.close()
 
-    return render_template('record.html', customers=customers, datetime=datetime, filter_date=filter_date)
+    return render_template('record.html', customers=customers, datetime=datetime, filter_date=filter_date, designers=designers)
 
 @app.route('/records', methods=['GET'])
 def get_records():
@@ -134,40 +231,6 @@ def query():
         conn.close()
 
     return render_template('query.html', customers=customers)
-
-@app.route('/setup', methods=['GET', 'POST'])
-def setup():
-    conn = sqlite3.connect('salon.db')
-    c = conn.cursor()
-    if request.method == 'POST':
-        for key, value in request.form.items():
-            if key.startswith('price_'):
-                service_name = key[6:]
-                price = float(value)
-                c.execute('INSERT OR REPLACE INTO services (name, price) VALUES (?, ?)', (service_name, price))
-            elif key.startswith('percentage_'):
-                parts = key.split('_')
-                service_name = parts[1]
-                designer_name = parts[2]
-                percentage = float(value)
-                c.execute('INSERT OR REPLACE INTO service_designers (service_name, designer_name, percentage) VALUES (?, ?, ?)', (service_name, designer_name, percentage))
-        conn.commit()
-        conn.close()
-        return redirect(url_for('setup'))
-    
-    c.execute('SELECT name, price FROM services')
-    services = c.fetchall()
-    service_data = []
-    for service in services:
-        c.execute('SELECT designer_name, percentage FROM service_designers WHERE service_name = ?', (service[0],))
-        designers = c.fetchall()
-        service_data.append({
-            'name': service[0],
-            'price': service[1],
-            'designers': [{'name': designer[0], 'percentage': designer[1]} for designer in designers]
-        })
-    conn.close()
-    return render_template('setup.html', services=service_data)
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
