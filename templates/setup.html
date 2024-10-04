@@ -1,129 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hair Salon Service - Setup</title>
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
-    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <title>設定產品價格</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
     <div class="container mt-5">
-        <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <nav class="navbar navbar-expand-lg navbar-light bg-light mb-4">
             <a class="navbar-brand" href="#">Hair Salon Service</a>
             <div class="collapse navbar-collapse">
-                <ul class="navbar-nav">
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('record') }}">紀錄資料</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('query') }}">查詢資料</a></li>
-                    <li class="nav-item"><a class="nav-link" href="{{ url_for('setup') }}">設定產品價格</a></li>
+                <ul class="navbar-nav mr-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/record">紀錄資料</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/query">查詢資料</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/setup">設定產品價格</a>
+                    </li>
                 </ul>
-            </div>
         </nav>
-
-        <h2 class="mb-4">Setup Services</h2>
-
-        <form id="setupForm" method="POST">
-            <div id="designer-blocks"></div>
-            <button type="button" id="add-designer-button" class="btn btn-secondary mt-3">Add Designer</button>
-            <button type="submit" class="btn btn-primary mt-3">Save</button>
+        <h1 class="mb-4">設定產品價格</h1>
+        <form method="POST" action="{{ url_for('setup') }}" class="mb-4">
+            {% for designer in designers %}
+            <h3>{{ designer.name }}</h3>
+            <div class="form-row">
+                {% for service, details in designer.services.items() %}
+                <div class="col-md-4">
+                    <div class="form-group">
+                        <label>{{ service }}</label>
+                        <input type="number" name="price_{{ designer.name }}_{{ service }}" class="form-control" value="{{ details.price }}" placeholder="價格" required>
+                        <input type="number" name="designer_commission_{{ designer.name }}_{{ service }}" class="form-control mt-2" value="{{ details.designer_commission }}" placeholder="設計師佣金" required>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn btn-primary">保存設定</button>
         </form>
     </div>
-
-    <script>
-        const services = ['洗髮', '剪髮', '染髮', '燙髮', '護髮', '彩妝', '頭皮護理'];
-
-        function createDesignerBlock(designer = { name: '', services: {} }) {
-            const designerBlock = $('<div>').addClass('designer-block mb-4');
-            const designerName = designer.name || 'New Designer';
-            const nameInput = $('<input>')
-                .attr('type', 'text')
-                .addClass('form-control mb-2')
-                .attr('name', 'designer_name')
-                .attr('value', designerName)
-                .attr('required', true);
-            designerBlock.append(nameInput);
-            
-            const table = $('<table>').addClass('table');
-            const headerRow = $('<tr>');
-            headerRow.append('<th>Service Item</th><th>Price</th><th>Designer Commission</th>');
-            table.append(headerRow);
-
-            services.forEach(service => {
-                const row = $('<tr>');
-                row.append(`<td>${service}</td>`);
-                row.append(`<td><input type="number" step="0.01" name="price_${service}" value="${designer.services[service]?.price || 0}" required></td>`);
-                row.append(`<td><input type="number" step="0.01" name="commission_${service}" value="${designer.services[service]?.designer_commission || 0}" required></td>`);
-                table.append(row);
-            });
-
-            designerBlock.append(table);
-
-            const deleteButton = $('<button>')
-                .addClass('btn btn-danger')
-                .text('Delete Designer')
-                .click(function(e) {
-                    e.preventDefault();
-                    if (confirm('Are you sure you want to delete this designer?')) {
-                        designerBlock.remove();
-                    }
-                });
-            designerBlock.append(deleteButton);
-
-            return designerBlock;
-        }
-
-        function loadDesigners() {
-            $.getJSON('/get_designers', function(data) {
-                $('#designer-blocks').empty();
-                data.designers.forEach(designer => {
-                    $('#designer-blocks').append(createDesignerBlock(designer));
-                });
-            });
-        }
-
-        $(document).ready(function() {
-            loadDesigners();
-
-            $('#add-designer-button').click(function() {
-                $('#designer-blocks').append(createDesignerBlock());
-            });
-
-            $('#setupForm').submit(function(e) {
-                e.preventDefault();
-                const formData = [];
-                $('.designer-block').each(function() {
-                    const block = $(this);
-                    const designerName = block.find('input[name="designer_name"]').val();
-                    const designerData = {
-                        name: designerName,
-                        services: {}
-                    };
-                    services.forEach(service => {
-                        designerData.services[service] = {
-                            price: block.find(`input[name="price_${service}"]`).val(),
-                            commission: block.find(`input[name="commission_${service}"]`).val()
-                        };
-                    });
-                    formData.push(designerData);
-                });
-
-                $.ajax({
-                    url: '/setup',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify({ designers: formData }),
-                    success: function(response) {
-                        alert('Settings saved successfully!');
-                        loadDesigners();
-                    },
-                    error: function(xhr, status, error) {
-                        alert('Error saving settings: ' + error);
-                    }
-                });
-            });
-        });
-    </script>
+    <!-- Bootstrap JS and dependencies -->
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.4/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
 </html>

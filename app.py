@@ -1,6 +1,7 @@
+import webbrowser
 from flask import Flask, render_template, request, redirect, url_for, jsonify
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
 
@@ -147,7 +148,8 @@ def record():
     date = datetime.now().strftime('%Y-%m-%d')
     if request.method == 'POST':
         customer_id = request.form.get('id', None)
-        designer_name = request.form['designer_name']
+        designer_names = request.form.getlist('designer_name')
+        designer_names_str = ', '.join(designer_names)
         date = request.form['date']
         customer_name = request.form['customer_name']
         customer_phone = request.form['customer_phone']
@@ -163,12 +165,12 @@ def record():
             c.execute('''
                 REPLACE INTO customers (id, designer_name, date, customer_name, customer_phone, service_items, products)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (customer_id, designer_name, date, customer_name, customer_phone, service_items, products))
+            ''', (customer_id, designer_names_str, date, customer_name, customer_phone, service_items, products))
         else:
             c.execute('''
                 INSERT INTO customers (designer_name, date, customer_name, customer_phone, service_items, products)
                 VALUES (?, ?, ?, ?, ?, ?)
-            ''', (designer_name, date, customer_name, customer_phone, service_items, products))
+            ''', (designer_names_str, date, customer_name, customer_phone, service_items, products))
         conn.commit()
         conn.close()
 
@@ -181,7 +183,7 @@ def record():
     c.execute('SELECT * FROM customers WHERE date = ?', (date,))
     customers = c.fetchall()
     c.execute('SELECT name FROM designers')
-    designers = c.fetchall()
+    designers = c.fetchall()  # Fetch designers from the database
     conn.close()
 
     return render_template('record.html', customers=customers, datetime=datetime, filter_date=filter_date, designers=designers)
@@ -207,30 +209,41 @@ def get_records():
 @app.route('/query', methods=['GET', 'POST'])
 def query():
     customers = []
+    # Calculate default start and end dates
+    default_start_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    default_end_date = datetime.now().strftime('%Y-%m-%d')
+
     if request.method == 'POST':
         query_method = request.form['query_method']
-        query_value = request.form['query_value']
 
         conn = sqlite3.connect('salon.db')
         c = conn.cursor()
 
         if query_method == 'by_date':
-            c.execute('SELECT * FROM customers WHERE date = ?', (query_value,))
+            start_date = request.form['start_date']
+            end_date = request.form['end_date']
+            c.execute('SELECT * FROM customers WHERE date BETWEEN ? AND ?', (start_date, end_date))
+
         elif query_method == 'by_designer':
-            c.execute('SELECT * FROM customers WHERE designer_name = ?', (query_value,))
+            query_value = request.form['query_value']
+            c.execute('SELECT * FROM customers WHERE designer_name LIKE ?', (f'%{query_value}%',))
         elif query_method == 'by_customer':
-            c.execute('SELECT * FROM customers WHERE customer_name = ?', (query_value,))
+            query_value = request.form['query_value']
+            c.execute('SELECT * FROM customers WHERE customer_name LIKE ?', (f'%{query_value}%',))
         elif query_method == 'by_phone':
-            c.execute('SELECT * FROM customers WHERE customer_phone = ?', (query_value,))
+            query_value = request.form['query_value']
+            c.execute('SELECT * FROM customers WHERE customer_phone LIKE ?', (f'%{query_value}%',))
         elif query_method == 'by_service':
-            c.execute('SELECT * FROM customers WHERE service_items = ?', (query_value,))
+            query_value = request.form['query_value']
+            c.execute('SELECT * FROM customers WHERE service_items LIKE ?', (f'%{query_value}%',))
         elif query_method == 'by_product':
+            query_value = request.form['query_value']
             c.execute('SELECT * FROM customers WHERE products LIKE ?', (f'%{query_value}%',))
 
         customers = c.fetchall()
         conn.close()
 
-    return render_template('query.html', customers=customers)
+    return render_template('query.html', customers=customers, default_start_date=default_start_date, default_end_date=default_end_date)
 
 @app.route('/delete/<int:id>', methods=['POST'])
 def delete(id):
@@ -241,6 +254,60 @@ def delete(id):
     conn.close()
     return jsonify(success=True)
 
+@app.route('/calculate_totals', methods=['GET'])
+def calculate_totals():
+    start_date = request.args.get('start_date')
+    end_date = request.args.get('end_date')
+
+    conn = sqlite3.connect('salon.db')
+    c = conn.cursor()
+
+    # Fetch all services and their prices
+    c.execute('SELECT name, price FROM services')
+    services = {row[0]: row[1] for row in c.fetchall()}
+
+    # Fetch all designers and their commissions
+    c.execute('SELECT designer_name, service_name, percentage FROM service_designers')
+    designer_commissions = {}
+    for designer_name, service_name, percentage in c.fetchall():
+        if designer_name not in designer_commissions:
+            designer_commissions[designer_name] = {}
+        designer_commissions[designer_name][service_name] = percentage
+
+    # Query to calculate the number of services for each designer
+    c.execute('''
+        SELECT designer_name, service_items
+        FROM customers
+        WHERE date BETWEEN ? AND ?
+    ''', (start_date, end_date))
+
+    results = c.fetchall()
+    conn.close()
+
+    # Calculate totals
+    designer_totals = {}
+    for designer_name, service_items in results:
+        designers = designer_name.split(', ')
+        services_list = service_items.split(', ')
+        for designer in designers:
+            if designer not in designer_totals:
+                designer_totals[designer] = {}
+            for service in services_list:
+                if service not in designer_totals[designer]:
+                    designer_totals[designer][service] = {'count': 0, 'price': services.get(service, 0), 'commission': designer_commissions.get(designer, {}).get(service, 0)}
+                designer_totals[designer][service]['count'] += 1
+
+    # Calculate total price for each service
+    for designer, services in designer_totals.items():
+        for service, details in services.items():
+            details['total'] = details['price'] * details['commission'] * details['count']
+
+    # Format the results
+    designers_totals = [{'name': designer, 'services': services} for designer, services in designer_totals.items()]
+
+    return jsonify(designers_totals=designers_totals)
+
 if __name__ == '__main__':
     init_db()
+    webbrowser.open('http://127.0.0.1:5000/')
     app.run(debug=True)

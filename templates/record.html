@@ -7,11 +7,11 @@
     <!-- Bootstrap CSS -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .product-group {
+        .product-group, .designer-group {
             display: flex;
             gap: 10px;
         }
-        .product-group input {
+        .product-group input, .designer-group select {
             flex: 1;
         }
         .delete-button {
@@ -34,16 +34,24 @@
             newField.innerHTML = `
                 <input type="text" name="product_name" class="form-control" placeholder="Product Name" value="${name}" required>
                 <input type="number" name="product_quantity" class="form-control" placeholder="Quantity" value="${quantity}" required>
+                <button type="button" class="btn btn-danger btn-sm ml-2" onclick="removeField(this)">-</button>
             `;
             productFields.appendChild(newField);
         }
 
         function fillForm(data) {
             document.getElementById('id').value = data.id;
-            document.getElementById('designer_name').value = data.designer_name;
             document.getElementById('date').value = data.date;
             document.getElementById('customer_name').value = data.customer_name;
             document.getElementById('customer_phone').value = data.customer_phone;
+
+            // Clear existing designer fields
+            document.getElementById('designer-fields').innerHTML = '';
+            data.designer_name.split(', ').forEach(designer => {
+                addDesignerField();
+                const lastDesignerField = document.querySelector('#designer-fields .designer-group:last-child select');
+                lastDesignerField.value = designer;
+            });
 
             // Clear existing service items checkboxes
             document.querySelectorAll('input[name="service_items"]').forEach(checkbox => {
@@ -113,6 +121,26 @@
                 });
         }
 
+        function addDesignerField() {
+            const designerFields = document.getElementById('designer-fields');
+            const newField = document.createElement('div');
+            newField.classList.add('designer-group');
+            newField.innerHTML = `
+                <select name="designer_name" class="form-control" required>
+                    {% for designer in designers %}
+                    <option value="{{ designer[0] }}">{{ designer[0] }}</option>
+                    {% endfor %}
+                </select>
+                <button type="button" class="btn btn-danger btn-sm ml-2" onclick="removeField(this)">-</button>
+            `;
+            designerFields.appendChild(newField);
+        }
+
+        function removeField(button) {
+            const fieldGroup = button.parentElement;
+            fieldGroup.remove();
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             let selectedRow = null;
             document.querySelectorAll('tr[data-record]').forEach(row => {
@@ -172,11 +200,17 @@
             <input type="hidden" id="id" name="id">
             <div class="form-group">
                 <label for="designer_name">設計師</label>
-                <select id="designer_name" name="designer_name" class="form-control" required>
-                    {% for designer in designers %}
-                    <option value="{{ designer.name }}">{{ designer.name }}</option>
-                    {% endfor %}
-                </select>
+                <div id="designer-fields">
+                    <div class="designer-group">
+                        <select name="designer_name" class="form-control" required>
+                            {% for designer in designers %}
+                            <option value="{{ designer[0] }}">{{ designer[0] }}</option>
+                            {% endfor %}
+                        </select>
+                        <button type="button" class="btn btn-danger btn-sm ml-2" onclick="removeField(this)">-</button>
+                    </div>
+                </div>
+                <button type="button" class="btn btn-secondary mt-2" onclick="addDesignerField()">+</button>
             </div>
             <div class="form-group">
                 <label for="date">日期</label>
@@ -243,6 +277,7 @@
                     <div class="product-group">
                         <input type="text" name="product_name" class="form-control" placeholder="產品名稱" required>
                         <input type="number" name="product_quantity" class="form-control" placeholder="數量" required>
+                        <button type="button" class="btn btn-danger btn-sm ml-2" onclick="removeField(this)">-</button>
                     </div>
                 </div>
                 <button type="button" class="btn btn-secondary mt-2" onclick="addProductField()">+</button>
